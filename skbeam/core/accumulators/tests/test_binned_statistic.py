@@ -1,6 +1,7 @@
 from skbeam.core.accumulators.binned_statistic import (RadialBinnedStatistic,
                                                        RPhiBinnedStatistic,
                                                        BinnedStatistic1D,
+                                                       BinnedStatistic2D,
                                                        BinnedStatisticDD)
 from numpy.testing import assert_array_almost_equal, assert_raises
 import numpy as np
@@ -271,3 +272,112 @@ def test_binmap3d():
     assert_array_almost_equal(rbinmap1[0][::1000], np.array([1, 10,  9,  8, 7,
                                                              6,  5,  4,  3, 2,
                                                              1]))
+
+
+def test_wrong_bin_dimensions_raises():
+    coordinate_values = [[1, 2, 3, 4]]
+    with pytest.raises(AttributeError):
+        BinnedStatisticDD(sample=coordinate_values,
+                          bins=((1, 2), (2, 4)))
+
+
+def test_overlapping_edges_shifted():
+    coordinate_values = np.array([[0, 0, 0, 0]]).T
+    bins = 2
+    dd = BinnedStatisticDD(sample=coordinate_values, bins=bins)
+
+    assert_array_almost_equal(np.array(dd.edges),
+                              np.array([[-0.5, 0, .5]]))
+
+
+def test_bad_statistic_raises_value_error():
+    coordinate_values = np.array([[0, 0, 0, 0]]).T
+    bins = 2
+
+    with pytest.raises(ValueError):
+        BinnedStatisticDD(sample=coordinate_values, bins=bins,
+                          statistic='unknown-stat')
+
+
+def test_list_of_bins_leads_to_expected_bins():
+    coordinate_values = np.array([[0, 0, 0, 0]]).T
+    bins = np.array([[0, 1, 2]])
+
+    dd = BinnedStatisticDD(sample=coordinate_values, bins=bins)
+    assert_array_equal(dd.edges, bins)
+
+
+def test_custom_statistic_filled_with_nan():
+    coordinate_values = np.array([[0, 0, 0, 0]]).T
+    bins = np.array([[-1, 0, 1]])
+
+    dd = BinnedStatisticDD(sample=coordinate_values, bins=bins)
+
+    def custom_statistic(x):
+        if len(x) == 0:
+            # This is to force the code to use np.nan as null values. Raising
+            # triggers this...
+            raise ValueError
+        return 0
+
+    values = np.array([0., 0., 0., 0])
+    result = dd(values, statistic=custom_statistic)
+    assert np.isnan(result[0])
+
+
+def test_binned_statistic1d_custom_bins():
+    coordinate_values = np.array([0, 0, 0, 0]).T
+    bins = np.array([-1, 0, 1])
+
+    dd = BinnedStatistic1D(coordinate_values, bins=bins)
+
+    assert_array_almost_equal(dd.bin_edges, bins)
+
+
+def test_binned_statistic2d_custom_bins():
+    coordinate_values_x = np.array([0, 0, 0, 0]).T
+    coordinate_values_y = np.array([0, 0, 0, 0]).T
+    bins = np.array([-1, 0, 1, 3, 4, 5])
+    expected_bins = np.array([
+                              [-1, 0, 1, 3, 4, 5],
+                              [-1, 0, 1, 3, 4, 5]])
+
+    dd = BinnedStatistic2D(coordinate_values_x, coordinate_values_y, bins=bins)
+
+    assert_array_almost_equal(dd.bin_edges, expected_bins)
+
+
+def test_rphi_binstat_incorrect_mask_shape_raises():
+    coordinate_values_r, _ = np.meshgrid([1, 2], [1, 2])
+    shape = coordinate_values_r.shape
+    bad_mask = np.array([1, 2, 3])
+
+    with pytest.raises(ValueError):
+        RPhiBinnedStatistic(shape, r_map=coordinate_values_r, mask=bad_mask)
+
+
+def test_rphi_binstat_incorrect_values_raises():
+    coordinate_values_r, _ = np.meshgrid([1, 2], [1, 2])
+    shape = coordinate_values_r.shape
+    bad_values = np.array([1, 2, 3, 4])
+
+    rr = RPhiBinnedStatistic(shape, r_map=coordinate_values_r)
+    with pytest.raises(ValueError):
+        rr(bad_values)
+
+
+def test_mutation_of_bins_raises():
+    # NOTE: The aim of this test is to specifically test the raising of
+    # RuntimeError within the __call__ method of binnedstatistic. It seems
+    # that the only way for this to occur is a mutation of the underlying
+    # attributes after insantiation.
+    coordinate_values = np.array([[0, 0, 0, 0]]).T
+    bins = np.array([[-1, 0, 1]])
+
+    dd = BinnedStatisticDD(sample=coordinate_values, bins=bins)
+    dd.nbin = np.array([4, 4, 4])
+    dd.ni = np.array([4, 4, 4])
+
+    values = np.array([0., 0., 0., 0])
+    with pytest.raises(RuntimeError):
+        dd(values)

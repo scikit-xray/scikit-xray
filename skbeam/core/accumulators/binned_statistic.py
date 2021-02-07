@@ -178,6 +178,9 @@ class BinnedStatisticDD(object):
             Ncount[i][on_edge] -= 1
 
         # Compute the sample indices in the flattened statistic matrix.
+        # TODO: These variables should be labeled as private, self._ni = ...
+        #  We dont want to encourage the mutation of these parameters after
+        #  instantiation.
         self.ni = self.nbin.argsort()
         self.xy = np.zeros(N, int)
         for i in np.arange(0, self.D - 1):
