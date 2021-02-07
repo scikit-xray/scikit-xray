@@ -40,6 +40,9 @@ from six.moves import zip
 import numpy as np
 from collections import deque
 from .fitting import fit_quad_to_peak
+import matplotlib.patches as mpatches
+import matplotlib.pyplot as plt
+from skimage import feature, transform
 import logging
 logger = logging.getLogger(__name__)
 
@@ -294,3 +297,74 @@ def filter_peak_height(y, cands, thresh, window=5):
 # add our refinement functions as an attribute on peak_refinement
 # ta make auto-wrapping for vistrials easier.
 peak_refinement.refine_function = [refine_log_quadratic, refine_quadratic]
+
+def find_center_rings_hough(image, num_rings, rad_range, intensity_thresh, sigma):
+    """
+    Take angled cut or multiple incremented cuts of image data.
+
+    Parameters
+    ----------
+    image : ndarray
+        Image data
+    num_rings : int
+        Number of candidate circles to be searched for
+    rad_range : array
+        The min, max, and increment for range of candidate radii to be searched
+    intensity_thresh : array
+        Min and max of intensity to be used in canny filter
+    sigma : float
+        Standard deviation applied in canny filter
+    v_range : array
+        Min and max for matplotlib colormap
+
+    Returns
+    -------
+    center :list
+        Center coordinates of candidate circles as (x,y) tuples
+    radii: array
+        radii of the candidate circles
+
+    """
+    low_thresh, hi_thresh = intensity_thresh
+    sigma = sigma
+    edges = feature.canny(image, sigma, low_threshold= low_thresh, high_threshold= hi_thresh)
+
+    # Range of possible radii
+    hough_radii = np.arange(*rad_range)
+    hough_res = transform.hough_circle(edges, hough_radii)
+
+    # Selects the most prominent circles, up to num_rings
+    accums, cx, cy, radii = transform.hough_circle_peaks(hough_res, hough_radii,
+                                               total_num_peaks=num_rings)
+
+    centers = [(cx[i], cy[i]) for i in range(len(radii))]
+    return centers, radii
+
+def draw_rings(image, centers, radii, v_range = None):
+    """
+    Draw rings on an image with matplotlib
+
+    Parameters
+    ----------
+    image : ndarray
+        Image data
+    centers : int
+        center points of each circle to be drawn
+    radii : array
+        Radii of circles to be drawn
+    v_range : array
+        Min and max for matplotlib colormap
+
+    """
+    fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(10, 4))
+
+    for i in range(len(radii)):
+        ax.scatter(centers[i][0], centers[i][1], s =20, c = 'red')
+        circ = mpatches.Circle((centers[i][0], centers[i][1]), radii[i], facecolor='none', edgecolor='r')
+        ax.add_artist(circ)
+
+    if v_range != None:
+        ax.imshow(image, cmap="viridis", vmin = v_range[0], vmax = v_range[1])
+    else:
+        ax.imshow(image, cmap="viridis")
+    plt.show()
