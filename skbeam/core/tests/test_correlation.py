@@ -49,6 +49,7 @@ from skbeam.core.correlation import (
     two_time_state_to_results,
     one_time_from_two_time,
     CrossCorrelator,
+    get_four_time_from_two_time,
 )
 from skbeam.core.mask import bad_to_nan_gen
 from skbeam.core.roi import ring_edges, segmented_rings
@@ -456,6 +457,22 @@ def test_CrossCorrelator2d():
         ycorr_ids_2D_symavg[index][ycorr_ids_2D[index].shape[0] // 2],
         np.array([0.94823482, 0.8629459, 1.35790022, 0.8629459, 0.94823482]),
     )
+
+
+def test_get_four_time_from_two_time():
+    np.random.seed(0)
+    ll = 5
+    g12 = np.random.rand(2, ll, ll)
+    for k in range(g12.shape[0]):
+        q = g12[k]
+        g12[k] = np.tril(q) + np.tril(q).T - 2 * np.diag(np.diag(q)) + \
+            np.diag(np.ones(len(q)))
+    g2 = np.random.rand(2, ll) + 10 * np.exp(-0.05 * np.array(range(ll)))
+    res = get_four_time_from_two_time(g12, g2, (1, ll))
+
+    assert_array_almost_equal(res, [[0., 0.00019202, 0.00053148, 0.],
+                                    [0., 0.00031959, 0.00028276, 0.]],
+                              decimal=8)
 
 
 def test_CrossCorrelator_badinputs():
